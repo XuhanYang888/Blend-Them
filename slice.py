@@ -1,7 +1,19 @@
 import sys
 import os
+import re
 import numpy as np
 from PIL import Image
+
+
+def get_next_sprite_index(output_dir):
+    highest_index = 0
+
+    for filename in os.listdir(output_dir):
+        match = re.fullmatch(r"sprite_(\d+)\.png", filename)
+        if match:
+            highest_index = max(highest_index, int(match.group(1)))
+
+    return highest_index + 1
 
 
 def main():
@@ -43,6 +55,7 @@ def main():
         f"Grid detected: {cols} columns by {rows} rows (Total slots: {cols * rows})")
 
     saved_sprites_count = 0
+    next_sprite_index = get_next_sprite_index(output_dir)
 
     for row in range(rows):
         for col in range(cols):
@@ -64,11 +77,12 @@ def main():
             if len(unique_colors) == 1:
                 continue
 
-            filename = f"sprite_r{row:03d}_c{col:03d}.png"
+            filename = f"sprite_{next_sprite_index}.png"
             filepath = os.path.join(output_dir, filename)
             sprite.save(filepath)
 
             saved_sprites_count += 1
+            next_sprite_index += 1
 
     print("Slicing complete,")
     print(f" - Empties skipped: {(cols * rows) - saved_sprites_count}")
