@@ -4,32 +4,60 @@ import torch.nn.functional as F
 
 
 class SpriteVAE(nn.Module):
-    def __init__(self, latent_dim=32):
+    def __init__(self, latent_dim=64):
         super(SpriteVAE, self).__init__()
         self.latent_dim = latent_dim
 
-        self.enc_conv1 = nn.Conv2d(4, 32, kernel_size=4, stride=2, padding=1)
-        self.enc_conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
-        self.enc_conv3 = nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)
+        self.enc1 = nn.Sequential(
+            nn.Conv2d(4, 64, kernel_size=3, stride=2, padding=1),
+            nn.LeakyReLU(0.2)
+        )
 
-        self.flatten_size = 128 * 4 * 4
+        self.enc2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2)
+        )
 
+        self.enc3 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2)
+        )
+
+        self.flatten_size = 256 * 4 * 4
         self.fc_mu = nn.Linear(self.flatten_size, latent_dim)
         self.fc_logvar = nn.Linear(self.flatten_size, latent_dim)
 
         self.dec_fc = nn.Linear(latent_dim, self.flatten_size)
 
-        self.dec_conv1 = nn.ConvTranspose2d(
-            128, 64, kernel_size=4, stride=2, padding=1)
-        self.dec_conv2 = nn.ConvTranspose2d(
-            64, 32, kernel_size=4, stride=2, padding=1)
-        self.dec_conv3 = nn.ConvTranspose2d(
-            32, 4, kernel_size=4, stride=2, padding=1)
+        self.dec1 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2)
+        )
+
+        self.dec2 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2)
+        )
+
+        self.dec3 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.BatchNorm2d(32),
+            nn.LeakyReLU(0.2)
+        )
+
+        self.final_conv = nn.Conv2d(32, 4, kernel_size=3, padding=1)
 
     def encode(self, x):
-        x = F.relu(self.enc_conv1(x))
-        x = F.relu(self.enc_conv2(x))
-        x = F.relu(self.enc_conv3(x))
+        x = self.enc1(x)
+        x = self.enc2(x)
+        x = self.enc3(x)
         x = x.view(-1, self.flatten_size)
         return self.fc_mu(x), self.fc_logvar(x)
 
@@ -40,10 +68,12 @@ class SpriteVAE(nn.Module):
 
     def decode(self, z):
         x = F.relu(self.dec_fc(z))
-        x = x.view(-1, 128, 4, 4)
-        x = F.relu(self.dec_conv1(x))
-        x = F.relu(self.dec_conv2(x))
-        return torch.sigmoid(self.dec_conv3(x))
+        x = x.view(-1, 256, 4, 4)
+        x = self.dec1(x)
+        x = self.dec2(x)
+        x = self.dec3(x)
+        x = self.final_conv(x)
+        return torch.sigmoid(x)
 
     def forward(self, x):
         mu, logvar = self.encode(x)
@@ -52,7 +82,8 @@ class SpriteVAE(nn.Module):
         return reconstructed, mu, logvar
 
 
-def vae_loss_function(reconstructed, original, mu, logvar, beta=0.01):
+def vae_loss_function(reconstructed, original, mu, logvar, beta):
+    # Alpha Masking
     alpha_orig = original[:, 3:4, :, :]
     alpha_recon = reconstructed[:, 3:4, :, :]
 

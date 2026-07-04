@@ -27,26 +27,29 @@ def main():
         device = torch.device("cpu")
     print(f"Training on device: {device}")
 
-    # Load dataset
     dataset = SpriteDataset("sprite_dataset.npy")
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-    # Initialize model
-    model = SpriteVAE(latent_dim=32).to(device)
+    model = SpriteVAE(latent_dim=64).to(device)
     optimizer = optim.Adam(model.parameters(), lr=5e-4)
-    epochs = 1000
+    epochs = 400
+    max_beta = 0.5
+    anneal_epochs = 200
 
     for epoch in range(epochs):
         model.train()
         total_loss = 0
+
+        current_beta = min(max_beta, max_beta * (epoch / anneal_epochs))
 
         for batch in dataloader:
             batch = batch.to(device)
             optimizer.zero_grad()
 
             reconstructed, mu, logvar = model(batch)
+
             loss, _, _ = vae_loss_function(
-                reconstructed, batch, mu, logvar, beta=1.5)
+                reconstructed, batch, mu, logvar, beta=current_beta)
 
             loss.backward()
             optimizer.step()
@@ -55,10 +58,10 @@ def main():
         avg_loss = total_loss / len(dataloader.dataset)
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(
-                f"Epoch [{epoch+1:03d}/{epochs}] | Average Loss: {avg_loss:.2f}")
+                f"Epoch [{epoch+1:03d}/{epochs}] | Beta: {current_beta:.3f} | Avg Loss: {avg_loss:.2f}")
 
     torch.save(model.state_dict(), "sprite_vae_weights.pth")
-    print("Completed. Model saved to 'sprite_vae_weights.pth'.")
+    print("Training complete! Model saved to 'sprite_vae_weights.pth'.")
 
 
 if __name__ == "__main__":

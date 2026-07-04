@@ -10,8 +10,22 @@ def tensor_to_image(tensor):
     return Image.fromarray(img_array, mode="RGBA")
 
 
+def slerp(val, low, high):
+    low_norm = low / torch.norm(low)
+    high_norm = high / torch.norm(high)
+
+    omega = torch.acos(torch.clamp(
+        torch.dot(low_norm.flatten(), high_norm.flatten()), -1.0, 1.0))
+    so = torch.sin(omega)
+
+    if so == 0:
+        return (1.0 - val) * low + val * high
+
+    return (torch.sin((1.0 - val) * omega) / so) * low + (torch.sin(val * omega) / so) * high
+
+
 def main():
-    model = SpriteVAE(latent_dim=32)
+    model = SpriteVAE(latent_dim=64)
     model.load_state_dict(torch.load(
         "sprite_vae_weights.pth", weights_only=True))
     model.eval()
@@ -30,7 +44,7 @@ def main():
         z_B, _ = model.encode(sprite_B)
 
         for t in [0.0, 0.25, 0.5, 0.75, 1.0]:
-            z_blend = torch.lerp(z_A, z_B, weight=t)
+            z_blend = slerp(t, z_A, z_B)
             blended_tensor = model.decode(z_blend)
             frames.append(tensor_to_image(blended_tensor))
 
