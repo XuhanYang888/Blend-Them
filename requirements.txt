@@ -1,0 +1,5 @@
+numpy
+pillow
+streamlit
+streamlit-image-select
+torch
