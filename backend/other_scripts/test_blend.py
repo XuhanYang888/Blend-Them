@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
-from vae import SpriteVAE
+from backend.vae import SpriteVAE
 
 
 def tensor_to_image(tensor):

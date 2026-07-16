@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 import io
 import random
-from vae import SpriteVAE
+from backend.vae import SpriteVAE
 from streamlit_image_select import image_select
 
 
