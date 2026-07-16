@@ -1,0 +1,121 @@
+import base64
+import io
+from contextlib import asynccontextmanager
+import numpy as np
+import torch
+from fastapi import FastAPI, HTTPException, Query
+from PIL import Image
+from vae import SpriteVAE
+
+WEIGHTS_PATH = "sprite_vae_weights.pth"
+DATASET_PATH = "sprite_dataset.npy"
+LATENT_DIM = 64
+
+
+class AppState:
+    model: SpriteVAE | None = None
+    dataset: np.ndarray | None = None
+    total_sprites: int = 0
+
+
+state = AppState()
+
+DEFAULT_PER_PAGE = 24
+
+
+def numpy_to_thumbnail(arr: np.ndarray) -> str:
+    img_array = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+    rgba_img = Image.fromarray(img_array, mode="RGBA")
+    rgba_img = rgba_img.resize((128, 128), resample=Image.Resampling.NEAREST)
+
+    buf = io.BytesIO()
+    rgba_img.save(buf, format="PNG")
+
+    b64_encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64_encoded}"
+
+
+def load_assets() -> None:
+    print(f"Loading model weights from '{WEIGHTS_PATH}'...")
+    model = SpriteVAE(latent_dim=LATENT_DIM)
+    model.load_state_dict(
+        torch.load(WEIGHTS_PATH, weights_only=True,
+                   map_location=torch.device("cpu"))
+    )
+    model.eval()
+
+    print(f"Loading sprite dataset from '{DATASET_PATH}'...")
+    dataset = np.load(DATASET_PATH)
+
+    state.model = model
+    state.dataset = dataset
+    state.total_sprites = len(dataset)
+
+    print(f"Loaded model ({sum(p.numel() for p in model.parameters()):,} params) "
+          f"and dataset ({state.total_sprites} sprites, shape {dataset.shape}).")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_assets()
+    yield
+
+
+app = FastAPI(title="Blend Them! API", lifespan=lifespan)
+
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "model_loaded": state.model is not None,
+        "total_sprites": state.total_sprites,
+        "sprite_shape": None if state.dataset is None else list(state.dataset.shape[1:]),
+    }
+
+
+@app.get("/sprites")
+def list_sprites(
+    page: int = Query(0, ge=0),
+    per_page: int = Query(DEFAULT_PER_PAGE, ge=1, le=100),
+    seed: int | None = Query(
+        None,
+        description="Optional shuffle seed. Same seed -> same order, "
+                    "0 for unshuffled order.",
+    ),
+):
+    if state.dataset is None:
+        raise HTTPException(status_code=503, detail="Dataset not loaded yet")
+
+    total = state.total_sprites
+    indices = list(range(total))
+
+    if seed is not None:
+        rng = np.random.default_rng(seed)
+        rng.shuffle(indices)
+
+    total_pages = (total - 1) // per_page + 1
+    start = page * per_page
+    end = min(start + per_page, total)
+
+    if start >= total:
+        raise HTTPException(status_code=404, detail="Page out of range")
+
+    page_indices = indices[start:end]
+    thumbnails = [
+        {"id": int(i), "thumbnail": numpy_to_thumbnail(state.dataset[i])}
+        for i in page_indices
+    ]
+
+    return {
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "total_sprites": total,
+        "seed": seed,
+        "sprites": thumbnails,
+    }
+
+
+# GET  /sprites/{id}
+# POST /blend

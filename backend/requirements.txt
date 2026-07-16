@@ -1,5 +1,6 @@
-numpy
-pillow
-streamlit
-streamlit-image-select
+fastapi
+uvicorn
 torch
+numpy
+Pillow
+python-multipart
