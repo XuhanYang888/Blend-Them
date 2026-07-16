@@ -6,6 +6,7 @@ import torch
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from PIL import Image
+from pydantic import BaseModel, Field
 
 from vae import SpriteVAE
 
@@ -23,6 +24,26 @@ class AppState:
 state = AppState()
 
 DEFAULT_PER_PAGE = 24
+
+
+def slerp(val: float, low: torch.Tensor, high: torch.Tensor) -> torch.Tensor:
+    low_norm = low / torch.norm(low)
+    high_norm = high / torch.norm(high)
+    omega = torch.acos(torch.clamp(
+        torch.dot(low_norm.flatten(), high_norm.flatten()), -1.0, 1.0))
+    so = torch.sin(omega)
+    if so == 0:
+        return (1.0 - val) * low + val * high
+    return (torch.sin((1.0 - val) * omega) / so) * low + (torch.sin(val * omega) / so) * high
+
+
+def apply_retro_threshold(
+    tensor: torch.Tensor, alpha_threshold: float = 0.5, color_steps: int = 8
+) -> torch.Tensor:
+    tensor[3] = (tensor[3] > alpha_threshold).float()
+    tensor[:3] = torch.round(
+        tensor[:3] * (color_steps - 1)) / (color_steps - 1)
+    return tensor
 
 
 def tensor_to_image(tensor: torch.Tensor) -> Image.Image:
@@ -74,6 +95,15 @@ def load_assets() -> None:
 async def lifespan(app: FastAPI):
     load_assets()
     yield
+
+
+class BlendRequest(BaseModel):
+    id_a: int
+    id_b: int
+    t: float = Field(0.5, ge=0.0, le=1.0)
+    use_filter: bool = True
+    alpha_thresh: float = Field(0.5, ge=0.0, le=1.0)
+    color_steps: int = Field(12, ge=2, le=32)
 
 
 app = FastAPI(title="Blend Them! API", lifespan=lifespan)
@@ -153,4 +183,51 @@ def get_sprite(sprite_id: int):
     return Response(content=png_bytes, media_type="image/png")
 
 
-# POST /blend
+@app.post("/blend")
+def blend_sprites(req: BlendRequest):
+    if state.dataset is None or state.model is None:
+        raise HTTPException(
+            status_code=503, detail="Model/dataset not loaded yet")
+
+    for sprite_id, label in [(req.id_a, "id_a"), (req.id_b, "id_b")]:
+        if not (0 <= sprite_id < state.total_sprites):
+            raise HTTPException(
+                status_code=404,
+                detail=f"{label} must be between 0 and {state.total_sprites - 1}",
+            )
+
+    with torch.no_grad():
+        sprite_a_tensor = torch.tensor(
+            state.dataset[req.id_a], dtype=torch.float32
+        ).permute(2, 0, 1)
+        sprite_b_tensor = torch.tensor(
+            state.dataset[req.id_b], dtype=torch.float32
+        ).permute(2, 0, 1)
+
+        a_input = sprite_a_tensor.unsqueeze(0)
+        b_input = sprite_b_tensor.unsqueeze(0)
+
+        z_a, _ = state.model.encode(a_input)
+        z_b, _ = state.model.encode(b_input)
+
+        z_blend = slerp(req.t, z_a, z_b)
+
+        blended_tensor = state.model.decode(z_blend).squeeze(0)
+
+        if req.use_filter:
+            blended_tensor = apply_retro_threshold(
+                blended_tensor, req.alpha_thresh, req.color_steps
+            )
+
+    final_img = tensor_to_image(blended_tensor).resize(
+        (256, 256), resample=Image.Resampling.NEAREST
+    )
+    png_bytes = image_to_png_bytes(final_img)
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'inline; filename="blended_t{req.t}.png"'
+        },
+    )
