@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import Response
 from PIL import Image
+
 from vae import SpriteVAE
 
 WEIGHTS_PATH = "sprite_vae_weights.pth"
@@ -21,6 +23,19 @@ class AppState:
 state = AppState()
 
 DEFAULT_PER_PAGE = 24
+
+
+def tensor_to_image(tensor: torch.Tensor) -> Image.Image:
+    img_array = tensor.permute(1, 2, 0).cpu().numpy()
+    img_array = np.clip(img_array * 255.0, 0, 255).astype(np.uint8)
+    img = Image.fromarray(img_array, mode="RGBA")
+    return img.resize((128, 128), resample=Image.Resampling.NEAREST)
+
+
+def image_to_png_bytes(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def numpy_to_thumbnail(arr: np.ndarray) -> str:
@@ -117,5 +132,25 @@ def list_sprites(
     }
 
 
-# GET  /sprites/{id}
+@app.get("/sprites/{sprite_id}")
+def get_sprite(sprite_id: int):
+    if state.dataset is None:
+        raise HTTPException(status_code=503, detail="Dataset not loaded yet")
+
+    if not (0 <= sprite_id < state.total_sprites):
+        raise HTTPException(
+            status_code=404,
+            detail=f"sprite_id must be between 0 and {state.total_sprites - 1}",
+        )
+
+    tensor = torch.tensor(
+        state.dataset[sprite_id], dtype=torch.float32
+    ).permute(2, 0, 1)
+
+    img = tensor_to_image(tensor)
+    png_bytes = image_to_png_bytes(img)
+
+    return Response(content=png_bytes, media_type="image/png")
+
+
 # POST /blend
