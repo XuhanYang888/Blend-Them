@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from PIL import Image
 from pydantic import BaseModel, Field
@@ -13,6 +14,13 @@ from vae import SpriteVAE
 WEIGHTS_PATH = "sprite_vae_weights.pth"
 DATASET_PATH = "sprite_dataset.npy"
 LATENT_DIM = 64
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+]
 
 
 class AppState:
@@ -108,6 +116,13 @@ class BlendRequest(BaseModel):
 
 app = FastAPI(title="Blend Them! API", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
 
 @app.get("/health")
 def health():
@@ -184,7 +199,12 @@ def get_sprite(sprite_id: int):
 
 
 @app.post("/blend")
-def blend_sprites(req: BlendRequest):
+def blend_sprites(
+    req: BlendRequest,
+    download: bool = Query(
+        False, description="True -> response is sent as a downloadable attachment."
+    ),
+):
     if state.dataset is None or state.model is None:
         raise HTTPException(
             status_code=503, detail="Model/dataset not loaded yet")
@@ -224,10 +244,13 @@ def blend_sprites(req: BlendRequest):
     )
     png_bytes = image_to_png_bytes(final_img)
 
+    disposition = "attachment" if download else "inline"
+    filename = f"blended_sprite_t{req.t}.png"
+
     return Response(
         content=png_bytes,
         media_type="image/png",
         headers={
-            "Content-Disposition": f'inline; filename="blended_t{req.t}.png"'
+            "Content-Disposition": f'{disposition}; filename="{filename}"'
         },
     )
