@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blend Them!</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="cartridge">
+      <header class="header">
+        <h1 class="pixel-title">Blend Them!</h1>
+        <p class="subtitle">Blend two sprites in latent space</p>
+      </header>
+
+      <section class="panel">
+        <h2 class="section-label">01 - Presets</h2>
+        <div class="preset-row" id="preset-row"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-label">02 - Browse Library</h2>
+
+        <div class="gallery-controls">
+          <button class="btn btn-small" id="prev-page">&larr; Prev</button>
+          <span class="page-indicator" id="page-indicator">Page 1 of 1</span>
+          <button class="btn btn-small" id="shuffle-btn">
+            &#8635; Shuffle
+          </button>
+          <button class="btn btn-small" id="next-page">Next &rarr;</button>
+        </div>
+
+        <div class="gallery-grid" id="gallery-grid"></div>
+
+        <div class="assign-row">
+          <span class="assign-hint" id="assign-hint"
+            >Click a sprite above to select it</span
+          >
+          <div class="assign-buttons">
+            <button class="btn" id="assign-a">Assign as Sprite A</button>
+            <button class="btn" id="assign-b">Assign as Sprite B</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-label">03 - Currently Blending</h2>
+        <div class="slot-row">
+          <div class="slot">
+            <div class="slot-frame">
+              <img id="preview-a" alt="Sprite A" />
+            </div>
+            <div class="slot-label">
+              SLOT A &middot; <span id="id-a">--</span>
+            </div>
+          </div>
+
+          <div class="blend-arrow">&#8596;</div>
+
+          <div class="slot">
+            <div class="slot-frame">
+              <img id="preview-b" alt="Sprite B" />
+            </div>
+            <div class="slot-label">
+              SLOT B &middot; <span id="id-b">--</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-label">04 - Blend Configuration</h2>
+
+        <div class="control-row">
+          <label for="t-slider"
+            >Interpolation (t = <span id="t-value">0.50</span>)</label
+          >
+          <input
+            type="range"
+            id="t-slider"
+            min="0"
+            max="1"
+            step="0.05"
+            value="0.5"
+          />
+        </div>
+
+        <details class="filter-details">
+          <summary>Rendering Filter Settings</summary>
+
+          <div class="control-row">
+            <label>
+              <input type="checkbox" id="use-filter" checked />
+              Enable Retro Thresholding Filter
+            </label>
+          </div>
+
+          <div class="control-row">
+            <label for="alpha-slider"
+              >Alpha Threshold (<span id="alpha-value">0.50</span>)</label
+            >
+            <input
+              type="range"
+              id="alpha-slider"
+              min="0.1"
+              max="0.9"
+              step="0.05"
+              value="0.5"
+            />
+          </div>
+
+          <div class="control-row">
+            <label for="color-slider"
+              >Color Quantization Steps (<span id="color-value">12</span
+              >)</label
+            >
+            <input
+              type="range"
+              id="color-slider"
+              min="2"
+              max="16"
+              step="1"
+              value="12"
+            />
+          </div>
+        </details>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-label">05 - Result</h2>
+
+        <div class="result-wrap">
+          <div class="slot result-slot">
+            <div class="slot-frame slot-frame--result" id="result-frame">
+              <img id="result-img" alt="Blended sprite" />
+              <div class="loading-overlay" id="loading-overlay">
+                forging&hellip;
+              </div>
+            </div>
+            <div class="slot-label">t = <span id="result-t">0.50</span></div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" id="download-btn">Download PNG</button>
+      </section>
+
+      <footer class="footer">
+        <span id="api-status">checking backend&hellip;</span>
+      </footer>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
