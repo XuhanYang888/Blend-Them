@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "blend-them-production.up.railway.app";
 
 const PRESETS = [
   { name: "Swords", a: 1040, b: 1334 },
