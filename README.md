@@ -4,10 +4,13 @@ An asset manipulation tool. It uses a local library of 2D game sprites (simple p
 
 ## Features
 
+**[DEMO LINK](https://blend-them.vercel.app/)**
+
 - Slicing sprite sheet grid into individual assets
 - Ingestion script that converts the assets into uniform $32 \times 32 \times 4$ (RGBA) float arrays scaled between 0.0 and 1.0 _(Change to support any dimensions later)_
 - Latent-space interpolation with a VAE model
-- Streamlit app for browsing sprites and blending them interactively. Live on [HuggingFace Spaces](https://huggingface.co/spaces/xuhanY/Blend-Them)
+- FastAPI backend in `backend/server.py` for access to sprites and blending
+- Frontend in `frontend/` for the browser UI
 - Downloadable blended result
 
 ## Workflow
@@ -17,7 +20,7 @@ The project is built around a simple pipeline:
 1. Slice a sprite sheet into individual PNG files.
 2. Ingest the sprites into a single `.npy` dataset.
 3. Train the VAE on the dataset.
-4. Launch the app and blend any two sprites in real time.
+4. Launch the FastAPI backend and the frontend UI to blend any two sprites in real time.
 
 ## Requirements
 
@@ -27,7 +30,7 @@ The project is built around a simple pipeline:
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ## Prepare the Dataset
@@ -35,13 +38,13 @@ pip install -r requirements.txt
 If you are starting from a sprite sheet, slice it into individual assets first:
 
 ```bash
-python slice.py <input_sprite_sheet_path> <output_dir> <sprite_width> <sprite_height>
+python backend/other_scripts/slice.py <input_sprite_sheet_path> <output_dir> <sprite_width> <sprite_height>
 ```
 
 Example:
 
 ```bash
-python slice.py assets/sheet.png assets/sprite 32 32
+python backend/other_scripts/slice.py assets/sheet.png backend/assets/sprite 32 32
 ```
 
 This will save each valid sprite as its own PNG file in the output directory.
@@ -49,13 +52,13 @@ This will save each valid sprite as its own PNG file in the output directory.
 Next, ingest the sprites into a dataset file:
 
 ```bash
-python ingest.py <input_dir> <output_file.npy>
+python backend/other_scripts/ingest.py <input_dir> <output_file.npy>
 ```
 
 Example:
 
 ```bash
-python ingest.py assets/sprite sprite_dataset.npy
+python backend/other_scripts/ingest.py backend/assets/sprite backend/sprite_dataset.npy
 ```
 
 The ingestion step converts every sprite to RGBA and resizes it to $32 \times 32$ if needed.
@@ -65,33 +68,36 @@ The ingestion step converts every sprite to RGBA and resizes it to $32 \times 32
 Train the VAE on the ingested dataset:
 
 ```bash
-python train.py
+python backend/other_scripts/train.py
 ```
 
-This reads `sprite_dataset.npy` and writes `sprite_vae_weights.pth` when training is complete.
+This reads `backend/sprite_dataset.npy` and writes `backend/sprite_vae_weights.pth` when training is complete.
 
-## Run the App
+## Run the Backend and Frontend
 
-Start the Streamlit interface with:
+Start the FastAPI backend with:
 
 ```bash
-streamlit run app.py
+uvicorn backend.server:app --reload
 ```
 
-The app loads `sprite_dataset.npy` and `sprite_vae_weights.pth` from the project root. From there you can:
+The API loads `backend/sprite_dataset.npy` and `backend/sprite_vae_weights.pth`. From there you can:
 
-- browse the sprite library
+- browse the sprite library through the API
 - assign any two sprites as Sprite A and Sprite B
 - blend them with the interpolation slider
 - download the blended result as a PNG
+
+To use the frontend, open `frontend/index.html` in a browser or serve the `frontend/` folder with any static file server.
+
+The frontend is built with plain HTML, CSS, and JavaScript and talks to the FastAPI backend.
 
 ## Testing
 
 There is also a small script for checking blend output:
 
 ```bash
-python test_blend.py
+python backend/other_scripts/test_blend.py
 ```
 
 It creates a simple blend strip and saves it as `blend_test_result.png`.
- 
